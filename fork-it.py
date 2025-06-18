@@ -2,8 +2,8 @@ import streamlit as st
 import requests
 import os
 import random
+import mimetypes, requests
 
-# ---------------- Styling ---------------- #
 st.set_page_config(page_title="Fork It, Let’s Eat", page_icon="🍽️", layout="centered")
 
 st.markdown("""
@@ -40,8 +40,14 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# ---------------- Constants ---------------- #
-GOOGLE_API_KEY = st.secrets.get("GOOGLE_API_KEY", os.environ.get("GOOGLE_API_KEY"))
+
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")  
+if GOOGLE_API_KEY is None:                     
+    try:
+        GOOGLE_API_KEY = st.secrets["GOOGLE_API_KEY"]
+    except (KeyError, st.errors.StreamlitAPIException):
+        GOOGLE_API_KEY = None      
+
 GEOCODING_URL = "https://maps.googleapis.com/maps/api/geocode/json"
 PLACES_SEARCH_URL = "https://maps.googleapis.com/maps/api/place/nearbysearch/json"
 PHOTO_BASE_URL = "https://maps.googleapis.com/maps/api/place/photo"
@@ -57,24 +63,40 @@ RADIUS_OPTIONS = {
 RATING_OPTIONS = ["Any", "3+", "3.5+", "4+", "4.5+"]
 PICKY_EXCLUDE_TYPES = ["sushi_restaurant", "seafood_restaurant", "raw_bar", "vegetarian_restaurant"]
 
-# ---------------- Header ---------------- #
 st.markdown("<h1 style='text-align:center;'>🍳 Fork It, Let’s Eat</h1>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; font-style: italic;'>A brunch roulette for chaotic moms who don’t want raw fish or kids near their croissants.</p>", unsafe_allow_html=True)
 
-# ---------------- Input ---------------- #
 zip_code = st.text_input("📍 Start from ZIP:", "77494")
 selected_radius_text = st.selectbox("🚗 How far are we brunching?", list(RADIUS_OPTIONS.keys()))
 min_rating_text = st.selectbox("⭐ Minimum Yelp-y Score?", RATING_OPTIONS)
 filter_picky = st.checkbox("🙅‍♀️ No raw, weird, or rabbit food?", value=True)
 blacklist = st.text_input("🚫 Hard pass places (comma-separated)").lower().split(',')
 
-# ---------------- Buttons ---------------- #
 find_food = st.button("✨ Fork It! Find Food!")
 random_choice = st.button("🎲 Just Pick One For Me")
 
-# ---------------- Helper ---------------- #
+def is_valid_image_url(url, timeout=5):
+    """
+    Checks if a URL points to a valid image by making a HEAD request.
+    Handles redirects from the Google Places Photo API.
+    Returns True if the URL successfully leads to an image, False otherwise.
+    """
+    if not url:
+        return False
+    try:
+        response = requests.head(url, timeout=timeout, allow_redirects=True)
+        if response.status_code == 200:
+            content_type = response.headers.get('Content-Type', '').lower()
+            if content_type.startswith('image/'):
+                return True 
+        return False
+    except requests.exceptions.Timeout:
+        return False
+    except requests.exceptions.RequestException as e:
+        return False
+
+    
 def get_filtered_results():
-    # Step 1: Get coordinates from ZIP
     geo_resp = requests.get(GEOCODING_URL, params={"address": zip_code, "key": GOOGLE_API_KEY}).json()
     if geo_resp.get("status") != "OK":
         st.error(f"Location fail: {geo_resp.get('error_message')}")
@@ -82,38 +104,54 @@ def get_filtered_results():
     loc = geo_resp["results"][0]["geometry"]["location"]
     lat, lng = loc["lat"], loc["lng"]
 
-    # Step 2: Get places
-    places_resp = requests.get(PLACES_SEARCH_URL, params={
+    places_params = {
         "location": f"{lat},{lng}",
         "radius": RADIUS_OPTIONS[selected_radius_text],
         "type": "restaurant",
         "keyword": "brunch",
         "key": GOOGLE_API_KEY
-    }).json()
+    }
+    places_resp = requests.get(PLACES_SEARCH_URL, params=places_params).json()
 
     spots = []
     for place in places_resp.get("results", []):
-        name = place.get("name", "").lower()
-        if any(b.strip() and b.strip() in name for b in blacklist):
+        name_lower = place.get("name", "").lower() 
+        if any(b.strip() and b.strip() in name_lower for b in blacklist):
             continue
+        
         rating = place.get("rating", 0)
-        if min_rating_text != "Any" and rating < float(min_rating_text.replace("+", "")):
+        min_rating_val = 0.0
+        if min_rating_text != "Any":
+            try:
+                min_rating_val = float(min_rating_text.replace("+", ""))
+            except ValueError:
+                st.warning(f"Invalid rating format: {min_rating_text}")
+        
+        if min_rating_text != "Any" and rating < min_rating_val:
             continue
+            
         if filter_picky and any(t in PICKY_EXCLUDE_TYPES for t in place.get("types", [])):
             continue
-        photo_url = None
-        photos = place.get("photos")
-        if photos:
-            ref = photos[0].get("photo_reference")
-            photo_url = f"{PHOTO_BASE_URL}?maxwidth=400&photoreference={ref}&key={GOOGLE_API_KEY}"
+
+        validated_photo_url = None 
+        photos_data = place.get("photos") 
+        if photos_data:
+            photo_reference = photos_data[0].get("photo_reference")
+            if photo_reference:
+                potential_api_photo_url = f"{PHOTO_BASE_URL}?maxwidth=400&photoreference={photo_reference}&key={GOOGLE_API_KEY}"
+                
+                if is_valid_image_url(potential_api_photo_url):
+                    validated_photo_url = potential_api_photo_url
+
         spots.append({
             "name": place.get("name", "Unknown Spot"),
             "rating": rating,
             "address": place.get("vicinity", "???"),
             "map_url": f"https://www.google.com/maps/search/?api=1&query_place_id={place.get('place_id')}",
-            "photo_url": photo_url
+            "photo_url": validated_photo_url # Use the validated URL
         })
     return sorted(spots, key=lambda x: x['rating'], reverse=True)
+
 
 def mimosa_meter(rating):
     try:
@@ -131,7 +169,6 @@ def mimosa_meter(rating):
     except:
         return "No mimosa energy detected"
 
-# ---------------- Run App ---------------- #
 if find_food or random_choice:
     if not GOOGLE_API_KEY:
         st.error("Missing Google API key. Check secrets or env vars.")
@@ -154,7 +191,7 @@ if find_food or random_choice:
                 </div>
             """, unsafe_allow_html=True)
             if pick['photo_url']:
-                st.image(pick['photo_url'], use_column_width=True)
+                st.image(pick['photo_url'], use_container_width=True)
 
         else:
             st.subheader(f"🍾 {len(results)} Brunchable Beauties Found:")
@@ -162,7 +199,7 @@ if find_food or random_choice:
                 st.markdown(f"<div class='spot-card'>", unsafe_allow_html=True)
                 st.markdown(f"<h4>🍽️ {spot['name']}</h4>", unsafe_allow_html=True)
                 if spot['photo_url']:
-                    st.image(spot['photo_url'], use_column_width=True)
+                    st.image(spot['photo_url'], use_container_width=True)
                 st.markdown(f"""
                     <p>{spot['address']}<br>
                     ⭐ {spot['rating']} – <span class="rating">{mimosa_meter(spot['rating'])}</span><br>
@@ -170,7 +207,6 @@ if find_food or random_choice:
                 """, unsafe_allow_html=True)
                 st.markdown("</div>", unsafe_allow_html=True)
 
-        # ---------------- Spotify Vibes ---------------- #
         st.markdown("### 🎧 Brunch Vibes (Optional Dance-Off)")
         st.components.v1.iframe(
             "https://open.spotify.com/embed/playlist/37i9dQZF1DX4WYpdgoIcn6?utm_source=generator",
