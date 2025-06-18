@@ -18,4 +18,4 @@ ENV PORT=8501
 EXPOSE 8501
 
 # Entry point
-CMD ["streamlit", "run", "fork_it.py", "--server.port=8501", "--server.enableCORS=false"]
+CMD ["streamlit", "run", "fork-it.py", "--server.port=8501", "--server.enableCORS=false"]
