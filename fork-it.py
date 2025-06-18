@@ -9,34 +9,97 @@ st.set_page_config(page_title="Fork It, Let’s Eat", page_icon="🍽️", layou
 st.markdown("""
     <style>
         html, body, [class*="css"] {
-            font-family: "Trebuchet MS", sans-serif;
+            font-family: 'Georgia', serif; 
+            color: #3E2723; 
+            background-color: #F1F8E9; 
         }
+
+        h1, h2, h3, h4, h5, h6 {
+            font-family: 'Roboto Slab', Georgia, serif; 
+            color: #880E4F; 
+            text-align: center; 
+            padding-bottom: 0.5em;
+             font-weight: bold; 
+        }
+
         .spot-card {
-            border: 2px solid #ffcc80;
-            border-radius: 15px;
-            padding: 1em;
-            margin-bottom: 1em;
-            background-color: #fff3e0;
-            box-shadow: 1px 1px 8px #e0cfcf;
+            background-color: #FFFFFF; 
+            border: 1px solid #d7ccc8; 
+            border-radius: 8px; 
+            padding: 1.5em;
+            margin-bottom: 1.5em;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+            transition: transform 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
         }
+
         .spot-card:hover {
-            background-color: #fff0d5;
+            transform: translateY(-4px); 
+            box-shadow: 0 5px 10px rgba(0,0,0,0.12);
         }
+
         .big-pick {
             font-size: 1.6em;
-            color: #d84315;
             font-weight: bold;
-            background-color: #ffe5d0;
-            border: 3px dashed #ffb74d;
-            border-radius: 12px;
+            color: #FFFFFF; 
+            background-color: #880E4F; 
             padding: 1em;
+            border-radius: 6px; 
+            box-shadow: 0 4px 8px rgba(136, 14, 79, 0.4);
             text-align: center;
-            margin-top: 20px;
+            margin: 1.5em 0;
         }
+
         .rating {
-            font-size: 1.2em;
-            color: #ff9800;
+            font-size: 1em;
+            color: #FF9800; 
+            font-weight: bold;
         }
+
+        .stButton>button {
+            background-color: #880E4F; 
+            color: white;
+            border: none;
+            border-radius: 6px; 
+            font-weight: bold;
+            padding: 0.7em 1.5em;
+            margin-top: 0.8em;
+            transition: background-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+        }
+
+        .stButton>button:hover {
+            background-color: #6A1B9A; 
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .stButton>button:active {
+            background-color: #4A148C;
+        }
+
+
+        .stTextInput>div>input {
+            background-color: #FFFFFF;
+            border: 1px solid #D7CCC8;
+            border-radius: 6px; 
+            padding: 0.7em 1em;
+            color: #3E2723; 
+        }
+
+         .stTextInput>div>input:focus {
+            border-color: #880E4F; 
+            box-shadow: 0 0 0 0.2rem rgba(136, 14, 79, 0.25); 
+            outline: none;
+        }
+
+        iframe {
+            border-radius: 8px; 
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1); 
+        }
+
+        .css-1d3y0rq { 
+            padding-top: 2rem;
+            padding-bottom: 2rem;
+        }
+
     </style>
 """, unsafe_allow_html=True)
 
@@ -53,12 +116,12 @@ PLACES_SEARCH_URL = "https://maps.googleapis.com/maps/api/place/nearbysearch/jso
 PHOTO_BASE_URL = "https://maps.googleapis.com/maps/api/place/photo"
 
 RADIUS_OPTIONS = {
-    "1 mile (~1.6 km)": 1600,
-    "3 miles (~4.8 km)": 4800,
-    "5 miles (~8 km)": 8000,
-    "10 miles (~16 km)": 16000,
-    "20 miles (~32 km)": 32000,
-    "Max (31 miles / 50 km)": 50000
+    "1 mile": 1600,
+    "3 miles": 4800,
+    "5 miles": 8000,
+    "10 miles": 16000,
+    "20 miles": 32000,
+    "Max (31 miles)": 50000
 }
 RATING_OPTIONS = ["Any", "3+", "3.5+", "4+", "4.5+"]
 PICKY_EXCLUDE_TYPES = ["sushi_restaurant", "seafood_restaurant", "raw_bar", "vegetarian_restaurant"]
@@ -71,9 +134,11 @@ selected_radius_text = st.selectbox("🚗 How far are we brunching?", list(RADIU
 min_rating_text = st.selectbox("⭐ Minimum Yelp-y Score?", RATING_OPTIONS)
 filter_picky = st.checkbox("🙅‍♀️ No raw, weird, or rabbit food?", value=True)
 blacklist = st.text_input("🚫 Hard pass places (comma-separated)").lower().split(',')
-
-find_food = st.button("✨ Fork It! Find Food!")
-random_choice = st.button("🎲 Just Pick One For Me")
+col1, col2 = st.columns(2)
+with col1:
+    find_food = st.button("✨ Fork It! Find Food!", use_container_width=True) 
+with col2:
+    random_choice = st.button("🎲 Just Pick One For Me", use_container_width=True)
 
 def is_valid_image_url(url, timeout=5):
     """
@@ -215,4 +280,3 @@ if find_food or random_choice:
 
     except Exception as e:
         st.error(f"💥 Something exploded: {e}")
-
